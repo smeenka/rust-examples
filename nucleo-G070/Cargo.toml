@@ -1,0 +1,39 @@
+[package]
+name = "blinky"
+version = "0.1.0"
+authors = ["asmeenk12@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+panic-halt = "0.2.0"
+panic-semihosting = "0.5.6"
+cortex-m-rt = "0.6.5"
+cortex-m-rtic = "0.6.0-alpha.5"
+cortex-m-semihosting = "0.3.7"
+nb = "1.0.0"
+smart-leds = "0.3.0"
+
+[dependencies.stm32g0]
+features = ["rt", "stm32g071"]
+version = "0.13.0"
+
+
+[dependencies.stm32g0xx-hal]
+default-features = false
+features = ["rt", "stm32g071"]
+version = "0.1.1"
+#path = "/data/workspace/rust/stm/stm32g0xx-hal"
+git = "https://github.com/smeenka/stm32g0xx-hal"
+branch = "feature/spi-half-duplex"
+
+
+[dependencies.ws2812-spi]
+version = "0.4.1"
+#path = "/data/workspace/rust/rust-stm32/ws2812-spi-rs/"
+git = "https://github.com/smeenka/ws2812-spi-rs"
+branch = "feature/halfduplex"
+
+
+[profile.release]
+lto = true
+
