@@ -12,7 +12,7 @@ extern crate stm32g0xx_hal as hal;
 
 use hal::prelude::*;
 use hal::rcc::{self, PllConfig};
-use hal::spi;
+use hal::spi::{NoMiso,NoSck};
 use hal::stm32;
 use rt::entry;
 use smart_leds::{SmartLedsWrite, RGB};
@@ -26,8 +26,8 @@ fn main() -> ! {
     let dp = stm32::Peripherals::take().expect("cannot take peripherals");
     let cp = cortex_m::Peripherals::take().expect("cannot take core peripherals");
 
-    // Configure APB bus clock to 48MHz, cause ws2812 requires 3Mbps SPI
-    let pll_cfg = PllConfig::with_hsi(4, 24, 2);
+    // Configure APB bus clock to 16MHz, cause ws2812 requires 4Mbps SPI
+    //let pll_cfg = PllConfig::with_hsi(4, 24, 2);
     //let rcc_cfg = rcc::Config::pll().pll_cfg(pll_cfg);    
     let rcc_cfg = rcc::Config::hsi(rcc::Prescaler::NotDivided);
     let mut rcc = dp.RCC.freeze(rcc_cfg);
@@ -36,9 +36,9 @@ fn main() -> ! {
     let mut delay = cp.SYST.delay(&mut rcc);
     let gpioa = dp.GPIOA.split(&mut rcc);
     let gpiob = dp.GPIOB.split(&mut rcc);
-    let gpiod = dp.GPIOD.split(&mut rcc);
+
     let mut spi = dp.SPI1.spi(
-        (gpiob.pb3, gpiob.pb4, gpiob.pb5),
+        (NoSck, NoMiso, gpiob.pb5),
         ws2812::MODE,
         4.mhz(),
         &mut rcc,
@@ -46,9 +46,6 @@ fn main() -> ! {
     spi.half_duplex_enable(true);
     spi.half_duplex_oe(true);
     spi.data_size(5);
-    //spi.dmamux();
-    //spi.enable_dma();
-
 
     let mut ws = Ws2812::new(spi);
 
@@ -66,7 +63,7 @@ fn main() -> ! {
         }
         ws.write(data.iter().cloned()).unwrap();
         cnt += 1;
-        delay.delay(1000.ms());
+        delay.delay(500.ms());
         blink.toggle().unwrap();
     }
 }
