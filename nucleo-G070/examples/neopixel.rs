@@ -10,6 +10,7 @@ extern crate nb;
 extern crate panic_halt;
 extern crate stm32g0xx_hal as hal;
 
+use hal::gpio::gpioa::PA5;
 use hal::prelude::*;
 use hal::rcc::{self, PllConfig};
 use hal::spi;
@@ -17,8 +18,6 @@ use hal::stm32;
 use rt::entry;
 use smart_leds::{SmartLedsWrite, RGB};
 use ws2812_spi as ws2812;
-use hal::gpio::gpioa::{PA5};
-
 
 #[entry]
 fn main() -> ! {
@@ -27,10 +26,9 @@ fn main() -> ! {
 
     // Configure APB bus clock to 48MHz, cause ws2812 requires 3Mbps SPI
     let pll_cfg = PllConfig::with_hsi(4, 24, 2);
-    let rcc_cfg = rcc::Config::pll().pll_cfg(pll_cfg);    
+    let rcc_cfg = rcc::Config::pll().pll_cfg(pll_cfg);
     //let rcc_cfg = rcc::Config::hsi(rcc::Prescaler::NotDivided);
     let mut rcc = dp.RCC.freeze(rcc_cfg);
-
 
     let mut delay = cp.SYST.delay(&mut rcc);
     let gpioa = dp.GPIOA.split(&mut rcc);

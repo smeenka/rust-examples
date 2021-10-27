@@ -14,18 +14,18 @@ nb = "1.0.0"
 smart-leds = "0.3.0"
 
 [dependencies.stm32g0]
-features = ["rt", "stm32g071"]
+features = ["rt"]
 version = "0.13.0"
 
 
 [dependencies.stm32g0xx-hal]
 default-features = false
-features = ["rt", "stm32g071"]
+features = ["rt", "stm32g070"]
 version = "0.1.1"
 #path = "/data/workspace/rust/stm/stm32g0xx-hal"
-git = "https://github.com/smeenka/stm32g0xx-hal"
-branch = "feature/spi-half-duplex"
-
+#git = "https://github.com/smeenka/stm32g0xx-hal"
+#branch = "feature/spi-half-duplex"
+git="https://github.com/stm32-rs/stm32g0xx-hal"
 
 [dependencies.ws2812-spi]
 version = "0.4.1"
