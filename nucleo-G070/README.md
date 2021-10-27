@@ -10,7 +10,7 @@ cargo embed --example blink
 
 ## Neopixel
 
-cargo embed --example neopixel   --release
+* cargo embed --example neopixel   --release
 
 
 ## Neopixel5bits
@@ -25,11 +25,11 @@ The ability to set the datasize to 5 and to switch to half duplex is not yet in 
 
 Please use next lines in cargo.toml:
 
-[dependencies.stm32g0xx-hal]
-default-features = false
-features = ["rt", "stm32g070"]
-version = "0.1.1"
-git="https://github.com/stm32-rs/stm32g0xx-hal"
+    [dependencies.stm32g0xx-hal]
+    default-features = false
+    features = ["rt", "stm32g070"]
+    version = "0.1.1"
+    git="https://github.com/stm32-rs/stm32g0xx-hal"
 
 To build and run this example:
 *  cargo embed --example neopixel5bits   --release
@@ -47,11 +47,11 @@ There is a patch in the master branch of the stm32g0xx-hal not yet in the crate 
 
 Please use next lines in cargo.toml:
 
-[dependencies.stm32g0xx-hal]
-default-features = false
-features = ["rt", "stm32g070"]
-version = "0.1.1"
-git="https://github.com/stm32-rs/stm32g0xx-hal"
+    [dependencies.stm32g0xx-hal]
+    default-features = false
+    features = ["rt", "stm32g070"]
+    version = "0.1.1"
+    git="https://github.com/stm32-rs/stm32g0xx-hal"
 
 To build and run this example:
 *  cargo embed --example motors_pwm 
