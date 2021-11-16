@@ -55,3 +55,18 @@ Please use next lines in cargo.toml:
 
 To build and run this example:
 *  cargo embed --example motors_pwm 
+
+## i2c_master i2c_slave
+
+This test should be used with 2 (nucleo) boards with i2c connected.
+On one board load the master test:
+*  cargo embed --example i2c_master
+On the other board load the slave test
+*  cargo embed --example i2c_slave
+
+The blocking variant of i2c is tested. Note that the i2c driver is on a feature branch of stm32g0xx-hal
+
+The test will check:
+* 2 good case for sending and reading from master to slave
+* bad cases where the frame size is not correct between master and slave
+* one good case for the master write_read with subaddressing
