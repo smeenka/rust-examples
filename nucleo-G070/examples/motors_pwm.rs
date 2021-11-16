@@ -32,7 +32,7 @@ mod app {
     use st_hal::rcc;
     use st_hal::serial::{FifoThreshold, FullConfig, Rx, Serial, Tx};
     use st_hal::stm32::USART2;
-    use st_hal::stm32::{TIM1, TIM3, TIM17};
+    use st_hal::stm32::{TIM1, TIM17, TIM3};
     use st_hal::timer::pins::TimerPin;
     use st_hal::timer::pwm::{Pwm, PwmPin};
     use st_hal::timer::{Channel1, Channel2, Channel3, Channel4, Timer};
@@ -47,7 +47,7 @@ mod app {
     pub enum Command {
         Init,
         SetMotor,
-        SetSpeed
+        SetSpeed,
     }
     #[derive(Clone, Debug, Copy)]
     pub enum Motor {
@@ -159,10 +159,7 @@ mod app {
         m4b.set_duty(10000);
 
         (
-            Shared {
-                blink,
-                counter,
-            },
+            Shared { blink, counter },
             Local {
                 idx: 0,
                 dir: Direction::Forward,
@@ -177,7 +174,7 @@ mod app {
                 m3b,
                 m4a,
                 m4b,
-                tim17: tim17
+                tim17: tim17,
             },
             init::Monotonics(),
         )
@@ -190,8 +187,8 @@ mod app {
         let tx = ctx.local.txd;
         let mut direction: Direction = Direction::Forward;
         let mut command: Command = Command::Init;
-        let mut motor:Motor = Motor::Motor1;
-        let mut pwm:u8 = 0;
+        let mut motor: Motor = Motor::Motor1;
+        let mut pwm: u8 = 0;
         let mut m1a = ctx.local.m1a;
         let mut m1b = ctx.local.m1b;
         let mut m2a = ctx.local.m2a;
@@ -203,62 +200,70 @@ mod app {
 
         loop {
             let byte = block!(ctx.local.rxd.read()).unwrap();
-            command = match byte as char  {
+            command = match byte as char {
                 // skip spaces
-                ' '       => continue,
+                ' ' => continue,
                 'm' | 'M' => Command::SetMotor,
-                'h' | 'H' => { giveHelp(tx); continue },
-                'f' | 'F' => { 
-                    direction = Direction::Forward; 
-                    Command::SetSpeed 
-                },
-                'b' | 'B' => { 
-                    direction = Direction::Backward; 
-                    Command::SetSpeed 
-                },
+                'h' | 'H' => {
+                    giveHelp(tx);
+                    continue;
+                }
+                'f' | 'F' => {
+                    direction = Direction::Forward;
+                    Command::SetSpeed
+                }
+                'b' | 'B' => {
+                    direction = Direction::Backward;
+                    Command::SetSpeed
+                }
                 's' | 'S' => Command::SetSpeed,
                 _ => {
                     writeln!(tx, "Unknown command\r").unwrap();
                     giveHelp(tx);
-                    continue
+                    continue;
                 }
             };
 
             let byte = block!(ctx.local.rxd.read()).unwrap();
 
             // skip spaces
-            if byte == 32 {continue}
+            if byte == 32 {
+                continue;
+            }
 
-            writeln!(tx,"Command ...  {:?}  \r", command ).unwrap();
+            writeln!(tx, "Command ...  {:?}  \r", command).unwrap();
 
             match command {
                 Command::SetMotor => {
-                motor = match byte as char {
-                        '1'=> Motor::Motor1, 
-                        '2'=> Motor::Motor2, 
-                        '3'=> Motor::Motor3, 
-                        '4'=> Motor::Motor4,
-                        _  => {
+                    motor = match byte as char {
+                        '1' => Motor::Motor1,
+                        '2' => Motor::Motor2,
+                        '3' => Motor::Motor3,
+                        '4' => Motor::Motor4,
+                        _ => {
                             writeln!(tx, "Allowed motor 1..4 \r").unwrap();
-                            continue
-                        } 
+                            continue;
+                        }
                     }
-                },
+                }
                 Command::SetSpeed => {
                     pwm = match byte as char {
-                       '0' | '1' |'2' |'3' |'4' |'5' |'6' |'7' |'8' |'9' => byte - 0x30,
-                        _  => {
+                        '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => byte - 0x30,
+                        _ => {
                             writeln!(tx, "Allowed speed 0..9\r").unwrap();
                             continue;
-                        }   
+                        }
                     }
-                }, 
-                _ => ()
+                }
+                _ => (),
             }
-            
-            writeln!(tx,
-                "Executing ... motor {:?}  pwm :{} direction:{:?}  \r", motor, pwm, direction
-            ).unwrap();
+
+            writeln!(
+                tx,
+                "Executing ... motor {:?}  pwm :{} direction:{:?}  \r",
+                motor, pwm, direction
+            )
+            .unwrap();
 
             let max1: u32 = m1a.get_max_duty() as u32;
 
@@ -299,17 +304,14 @@ mod app {
         writeln!(tx, "  m<1..4>- -- select motor\r").unwrap();
         writeln!(tx, "  n        -- full stop all\r").unwrap();
         writeln!(tx, "  full command example: m3 f 3\r").unwrap();
-
     }
 
-    
     #[task(binds = TIM17,  priority = 1, local = [tim17], shared = [  blink])]
     fn timer17(ctx: timer17::Context) {
         let mut blink = ctx.shared.blink;
-        blink.lock( |b| b.toggle().unwrap());
+        blink.lock(|b| b.toggle().unwrap());
         ctx.local.tim17.clear_irq();
     } // tim 17
-    
 
     //extern "C" {
     //    fn I2C1();
