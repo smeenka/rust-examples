@@ -22,7 +22,8 @@ mod app {
     extern crate rtic;
     extern crate stm32g0xx_hal as st_hal;
     use core::fmt::{Debug, Display, Write};
-
+    use core::marker::PhantomData;
+    use nb;
     //use st_hal::exti::Event;
     extern crate panic_semihosting;
     use nb::block;
@@ -45,33 +46,25 @@ mod app {
     }
     #[derive(Clone, Debug, Copy)]
     pub enum Command {
-        Init,
+        Parse,
         SetMotor,
         SetSpeed,
+        StopAll
     }
     #[derive(Clone, Debug, Copy)]
     pub enum Motor {
+        MotorAll,
         Motor1,
         Motor2,
         Motor3,
         Motor4,
     }
-
-    #[shared]
-    #[derive(Debug, Display)]
-    struct Shared {
-        //exti: stm32::EXTI,
-        blink: PA5<Output<PushPull>>,
-        counter: usize,
-    }
-
-    #[local]
-    struct Local {
-        idx: u32,
+    #[derive()]
+    pub struct AppState {
+        motor: Motor,
+        command: Command,
+        pwm:usize,
         dir: Direction,
-        command: u32,
-        txd: Tx<USART2, FullConfig>,
-        rxd: Rx<USART2, FullConfig>,
         m1a: PwmPin<TIM1, Channel1>,
         m1b: PwmPin<TIM1, Channel2>,
         m2a: PwmPin<TIM1, Channel3>,
@@ -80,7 +73,20 @@ mod app {
         m3b: PwmPin<TIM3, Channel2>,
         m4a: PwmPin<TIM3, Channel3>,
         m4b: PwmPin<TIM3, Channel4>,
+        txd: Tx<USART2, FullConfig>,
+        rxd: Rx<USART2, FullConfig>,
+    }
+    #[shared]
+    #[derive(Debug, Display)]
+    struct Shared {
+        //exti: stm32::EXTI,
+        counter: usize,
+        blink: PA5<Output<PushPull>>
+    }
+    #[local]
+    struct Local {
         tim17: Timer<TIM17>,
+        state:AppState
     }
 
     #[init()]
@@ -88,8 +94,10 @@ mod app {
         // HSI prescaler: 8, sys_clk: 2MHz
 
         //let cfg = rcc::Config::hsi(rcc::Prescaler::Div8);
-        let cfg = rcc::Config::default();
+        //let cfg = rcc::Config::default();
         //let cfg = rcc::Config::pll();
+        let cfg = rcc::Config::hsi(rcc::Prescaler::NotDivided);          
+
         let mut rcc = ctx.device.RCC.freeze(cfg);
         //rcc.enable_low_power_mode();
 
@@ -97,8 +105,6 @@ mod app {
         let gpiob = ctx.device.GPIOB.split(&mut rcc);
         let gpioc = ctx.device.GPIOC.split(&mut rcc);
 
-        //let mut serial = ctx.device.USART2
-        //    .usart(gpioa.pa2, gpioa.pa3,
         let mut serial = ctx
             .device
             .USART2
@@ -115,9 +121,7 @@ mod app {
 
         let (mut txd, mut rxd) = serial.split();
 
-        writeln!(txd, "pwm example abcd ABCD\r").unwrap();
-
-        let mut blink = gpioa.pa5.into_push_pull_output();
+        writeln!(txd, "Test 4 motors interactive over Serial\r").unwrap();
 
         let mut tim17 = ctx.device.TIM17.timer(&mut rcc);
         tim17.start(500.ms());
@@ -128,172 +132,186 @@ mod app {
         let pwm1 = ctx.device.TIM1.pwm(100.hz(), &mut rcc);
         let pwm3 = ctx.device.TIM3.pwm(100.hz(), &mut rcc);
 
-        let mut m1a = pwm1.bind_pin(gpioa.pa8);
-        let mut m1b = pwm1.bind_pin(gpioa.pa9);
+        let mut blink = gpioa.pa5.into_push_pull_output();
 
-        let mut m2a = pwm1.bind_pin(gpioa.pa10);
-        let mut m2b = pwm1.bind_pin(gpioa.pa11);
+        let mut state = AppState{
+            pwm:0,
+            motor:Motor::Motor1,
+            command:Command::Parse,
+            dir:Direction::Forward,
+            m1a : pwm1.bind_pin(gpioa.pa8),
+            m1b : pwm1.bind_pin(gpioa.pa9),
+            m2a : pwm1.bind_pin(gpioa.pa10),
+            m2b : pwm1.bind_pin(gpioa.pa11),
+            m3a : pwm3.bind_pin(gpioa.pa6),
+            m3b : pwm3.bind_pin(gpioa.pa7),
+            m4a : pwm3.bind_pin(gpiob.pb0),
+            m4b : pwm3.bind_pin(gpiob.pb1),
+            txd,
+            rxd 
+        };
+        state.m1a.enable();
+        state.m1b.enable();
+        state.m2a.enable();
+        state.m2b.enable();
+        state.m3a.enable();
+        state.m3b.enable();
+        state.m4a.enable();
+        state.m4b.enable();
 
-        let mut m3a = pwm3.bind_pin(gpioa.pa6);
-        let mut m3b = pwm3.bind_pin(gpioa.pa7);
+        state.m1a.set_duty(0);
+        state.m1b.set_duty(0);
+        state.m2a.set_duty(0);
+        state.m2b.set_duty(0);
+        state.m3a.set_duty(0);
+        state.m3b.set_duty(0);
+        state.m4a.set_duty(0);
+        state.m4b.set_duty(0);
 
-        let mut m4a = pwm3.bind_pin(gpiob.pb0);
-        let mut m4b = pwm3.bind_pin(gpiob.pb1);
-
-        m1a.enable();
-        m1b.enable();
-        m2a.enable();
-        m2b.enable();
-        m3a.enable();
-        m3b.enable();
-        m4a.enable();
-        m4b.enable();
-
-        m1a.set_duty(10000);
-        m1b.set_duty(10000);
-        m2a.set_duty(10000);
-        m2b.set_duty(10000);
-        m3a.set_duty(10000);
-        m3b.set_duty(10000);
-        m4a.set_duty(10000);
-        m4b.set_duty(10000);
-
+        // return tuple
         (
-            Shared { blink, counter },
+            Shared { counter, blink },
             Local {
-                idx: 0,
-                dir: Direction::Forward,
-                command: 0,
-                txd,
-                rxd,
-                m1a,
-                m1b,
-                m2a,
-                m2b,
-                m3a,
-                m3b,
-                m4a,
-                m4b,
+                state,
                 tim17: tim17,
             },
             init::Monotonics(),
         )
     }
 
-    #[idle(local = [rxd, txd, m1a, m1b, m2a, m2b, m3a,m3b,m4a,m4b ],  shared = [])]
+    #[idle(local = [state ],  shared = [])]
     fn idle(ctx: idle::Context) -> ! {
         // Locals in idle have lifetime 'static
         //        let idx: &'static mut u32 = ctx.local.idx;
-        let tx = ctx.local.txd;
-        let mut direction: Direction = Direction::Forward;
-        let mut command: Command = Command::Init;
-        let mut motor: Motor = Motor::Motor1;
-        let mut pwm: u8 = 0;
-        let mut m1a = ctx.local.m1a;
-        let mut m1b = ctx.local.m1b;
-        let mut m2a = ctx.local.m2a;
-        let mut m2b = ctx.local.m2b;
-        let mut m3a = ctx.local.m3a;
-        let mut m3b = ctx.local.m3b;
-        let mut m4a = ctx.local.m4a;
-        let mut m4b = ctx.local.m4b;
+        let mut state = ctx.local.state;
 
         loop {
-            let byte = block!(ctx.local.rxd.read()).unwrap();
-            command = match byte as char {
-                // skip spaces
-                ' ' => continue,
-                'm' | 'M' => Command::SetMotor,
-                'h' | 'H' => {
-                    giveHelp(tx);
-                    continue;
-                }
-                'f' | 'F' => {
-                    direction = Direction::Forward;
-                    Command::SetSpeed
-                }
-                'b' | 'B' => {
-                    direction = Direction::Backward;
-                    Command::SetSpeed
-                }
-                's' | 'S' => Command::SetSpeed,
-                _ => {
-                    writeln!(tx, "Unknown command\r").unwrap();
-                    giveHelp(tx);
-                    continue;
-                }
+            if parseFirstLetter(&mut state) {
+                if parseSecondLetter(&mut state) {
+                    execute(&mut state);
+                };
             };
+        }
+    }
 
-            let byte = block!(ctx.local.rxd.read()).unwrap();
-
-            // skip spaces
-            if byte == 32 {
-                continue;
-            }
-
-            writeln!(tx, "Command ...  {:?}  \r", command).unwrap();
-
-            match command {
-                Command::SetMotor => {
-                    motor = match byte as char {
-                        '1' => Motor::Motor1,
-                        '2' => Motor::Motor2,
-                        '3' => Motor::Motor3,
-                        '4' => Motor::Motor4,
-                        _ => {
-                            writeln!(tx, "Allowed motor 1..4 \r").unwrap();
-                            continue;
-                        }
-                    }
-                }
-                Command::SetSpeed => {
-                    pwm = match byte as char {
-                        '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => byte - 0x30,
-                        _ => {
-                            writeln!(tx, "Allowed speed 0..9\r").unwrap();
-                            continue;
-                        }
-                    }
-                }
-                _ => (),
-            }
-
-            writeln!(
-                tx,
-                "Executing ... motor {:?}  pwm :{} direction:{:?}  \r",
-                motor, pwm, direction
-            )
-            .unwrap();
-
-            let max1: u32 = m1a.get_max_duty() as u32;
-
-            let mut mpos = 0;
-            let mut mneg = 0;
-            let duty = (max1 * pwm as u32) / 10;
-            match direction {
-                Forward => mpos = duty,
-                Backward => mneg = duty,
-            }
-            match motor {
-                Motor1 => {
-                    m1a.set_duty(mpos as u16);
-                    m1b.set_duty(mneg as u16);
-                }
-                Motor2 => {
-                    m2a.set_duty(mpos as u16);
-                    m2b.set_duty(mneg as u16);
-                }
-                Motor3 => {
-                    m3a.set_duty(mpos as u32);
-                    m3b.set_duty(mneg as u32);
-                }
-                Motor4 => {
-                    m4a.set_duty(mpos as u32);
-                    m4b.set_duty(mneg as u32);
-                }
-                _ => (),
+    // Parse the first letter of the command return true if succesfull
+    fn parseFirstLetter(state:&mut AppState) ->bool{
+        // flush rx
+        loop {
+            match state.rxd.read() {
+                Err(nb::Error::WouldBlock) => break,
+                _ => ()
             }
         }
+        let mut result = true;
+        let c = block!(state.rxd.read()).unwrap();
+
+        state.command = match c as char {
+            // skip spaces
+            'm' | 'M' =>  {
+                Command::SetMotor 
+            },
+            'h' | 'H' => { 
+                giveHelp(&mut state.txd);
+                result = false;
+                Command::Parse
+            },
+            'f' | 'F' => {
+                state.dir = Direction::Forward;
+                Command::SetSpeed
+            },
+            'b' | 'B' => {
+                state.dir = Direction::Backward;
+                Command::SetSpeed
+            },
+            's' | 'S' => {
+                Command::SetSpeed
+            },
+            _ => {
+                writeln!(state.txd, "Unknown command\r").unwrap();
+                giveHelp(&mut state.txd);
+                result = false;
+                Command::Parse
+            }
+        };
+        result
+    }
+
+    // Parse the second letter of the command return true if succesfull
+    fn parseSecondLetter(state:&mut AppState) ->bool{
+        // read character until not a space
+        let mut c = 32;
+        while c == 32 {
+            c  = block!(state.rxd.read()).unwrap();
+        }
+        //writeln!(state.txd, "Reached second state: Second state command {:?} \r", state.command);
+        match state.command {
+            Command::SetMotor => {
+                state.motor = match c as char {
+                    '0' => Motor::MotorAll,
+                    '1' => Motor::Motor1,
+                    '2' => Motor::Motor2,
+                    '3' => Motor::Motor3,
+                    '4' => Motor::Motor4,
+                    _ => {
+                        writeln!(state.txd, "Allowed motor 0..4 \r").unwrap();
+                        return false
+                    }
+                };
+            }
+            Command::SetSpeed => {
+                let inp = match c as char {
+                    '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => c - 0x30,
+                    _ => {
+                        writeln!(state.txd, "Allowed speed 0..9\r").unwrap();
+                        return false
+                    }
+                };
+                let max1 = state.m1a.get_max_duty() as usize;
+                state.pwm = (max1 * inp as usize) / 10;
+            },
+            _ => (),
+        };
+        true
+    }
+
+    fn execute(state:&mut AppState){
+        writeln!(state.txd, "Execute command {:?} dir {:?} pwm {} \r", state.command, state.dir, state.pwm).unwrap();
+    
+        let mut mpos = 0;
+        let mut mneg = 0;
+        match state.dir {
+            Direction::Forward => mpos = state.pwm,
+            Direction::Backward => mneg = state.pwm,
+        }
+        match state.motor {
+            Motor::Motor1 => {
+                state.m1a.set_duty(mpos as u16);
+                state.m1b.set_duty(mneg as u16);
+            },
+            Motor::Motor2 => {
+                state.m2a.set_duty(mpos as u16);
+                state.m2b.set_duty(mneg as u16);
+            },
+            Motor::Motor3 => {
+                state.m3a.set_duty(mpos as u32);
+                state.m3b.set_duty(mneg as u32);
+            },
+            Motor::Motor4 => {
+                state.m4a.set_duty(mpos as u32);
+                state.m4b.set_duty(mneg as u32);
+            },
+            Motor::MotorAll => {
+                state.m1a.set_duty(mpos as u16);
+                state.m1b.set_duty(mneg as u16);
+                state.m2a.set_duty(mpos as u16);
+                state.m2b.set_duty(mneg as u16);
+                state.m3a.set_duty(mpos as u32);
+                state.m3b.set_duty(mneg as u32);
+                state.m4a.set_duty(mpos as u32);
+                state.m4b.set_duty(mneg as u32);
+            }
+        };
     }
 
     fn giveHelp(tx: &mut Tx<USART2, FullConfig>) {
@@ -301,7 +319,7 @@ mod app {
         writeln!(tx, "  h  -- help this message\r").unwrap();
         writeln!(tx, "  f<0..9> -- direction positive\r").unwrap();
         writeln!(tx, "  b<0..9> -- direction negative\r").unwrap();
-        writeln!(tx, "  m<1..4>- -- select motor\r").unwrap();
+        writeln!(tx, "  m<0..4>- -- select motor. 0 is all motors\r").unwrap();
         writeln!(tx, "  n        -- full stop all\r").unwrap();
         writeln!(tx, "  full command example: m3 f 3\r").unwrap();
     }
@@ -313,7 +331,4 @@ mod app {
         ctx.local.tim17.clear_irq();
     } // tim 17
 
-    //extern "C" {
-    //    fn I2C1();
-    //}
 }

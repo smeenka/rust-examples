@@ -17,7 +17,7 @@ mod app {
     use hal::prelude::*;
     use hal::rcc;
     use hal::serial::{FifoThreshold, FullConfig, Rx, Serial, Tx};
-    use hal::stm32::USART1;
+    use hal::stm32::USART2;
     use hal::stm32::{TIM14, TIM16, TIM17};
     use hal::timer::pins::TimerPin;
     use hal::timer::Timer;
@@ -28,14 +28,14 @@ mod app {
     #[shared]
     struct Shared {
         //exti: stm32::EXTI,
-        txd2: Tx<USART1, FullConfig>,
+        txd: Tx<USART2, FullConfig>,
     }
     #[local]
     struct Local {
         counter: usize,
         blink: PA5<Output<PushPull>>,
         tim17: Timer<TIM17>,
-        rxd2: Rx<USART1, FullConfig>,
+        rxd: Rx<USART2, FullConfig>,
     }
 
     #[init()]
@@ -51,10 +51,10 @@ mod app {
 
         let mut serial = ctx
             .device
-            .USART1
+            .USART2
             .usart(
-                gpiob.pb6,
-                gpiob.pb7,
+                gpioa.pa2,
+                gpioa.pa3,
                 FullConfig::default()
                     .baudrate(115200.bps())
                     .fifo_enable()
@@ -64,10 +64,10 @@ mod app {
             )
             .unwrap();
 
-        let (mut txd2, mut rxd2) = serial.split();
-        rxd2.listen();
+        let (mut txd, mut rxd) = serial.split();
+        rxd.listen();
 
-        writeln!(txd2, "Input example\r").unwrap();
+        writeln!(txd, "Input example\r").unwrap();
 
         let mut blink = gpioa.pa5.into_push_pull_output();
 
@@ -80,33 +80,33 @@ mod app {
         (
             Shared {
                 //exti: ctx.device.EXTI,
-                txd2,
+                txd,
             },
             Local {
                 counter,
                 blink,
                 tim17,
-                rxd2,
+                rxd,
             },
             init::Monotonics(),
         )
     }
 
-    #[task(binds = TIM17,  priority = 1, local = [tim17,  blink,counter], shared = [txd2 ])]
+    #[task(binds = TIM17,  priority = 1, local = [tim17,  blink,counter], shared = [txd ])]
     fn timer17(ctx: timer17::Context) {
         ctx.local.blink.toggle().unwrap();
-        let mut txd2 = ctx.shared.txd2;
+        let mut txd = ctx.shared.txd;
         let counter = ctx.local.counter;
         *counter = *counter + 1;
-        txd2.lock(|txd2| writeln!(txd2, "Counter:{}\r", counter).unwrap());
+        txd.lock(|txd| writeln!(txd, "Counter:{}\r", counter).unwrap());
         ctx.local.tim17.clear_irq();
     } // tim 17
 
-    #[task(binds = USART1,  priority = 1, local = [rxd2], shared = [ txd2])]
-    fn serial2_read(ctx: serial2_read::Context) {
-        let mut txd2 = ctx.shared.txd2;
+    #[task(binds = USART2,  priority = 1, local = [rxd], shared = [ txd])]
+    fn serial_read(ctx: serial_read::Context) {
+        let mut txd = ctx.shared.txd;
         loop {
-            match ctx.local.rxd2.read() {
+            match ctx.local.rxd.read() {
                 Err(nb::Error::WouldBlock) => {
                     // no more data available in fifo
                     break;
@@ -116,15 +116,10 @@ mod app {
                     break;
                 }
                 Ok(byte) => {
-                    txd2.lock(|txd2| write!(txd2, "{}", byte as char).unwrap());
+                    txd.lock(|txd| write!(txd, "{}", byte as char).unwrap());
                 }
             }
         }
-
-        //ctx.local.rxd2.clear_irq();
     } // serial 2 RX
 
-    //extern "C" {
-    //    fn I2C1();
-    //}
 }
