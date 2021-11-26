@@ -121,5 +121,4 @@ mod app {
             }
         }
     } // serial 2 RX
-
 }

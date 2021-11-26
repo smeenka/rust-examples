@@ -10,7 +10,8 @@ extern crate panic_halt;
 extern crate stm32g0xx_hal as hal;
 
 use core::fmt::Write;
-use hal::i2c::{Config, Error, I2cDirection, I2cSlave, SlaveAddressMask};
+use hal::i2c::blocking::I2cSlave;
+use hal::i2c::{Config, Error, I2cDirection, SlaveAddressMask};
 use hal::prelude::*;
 use hal::rcc::{self, PllConfig};
 use hal::serial::FullConfig;

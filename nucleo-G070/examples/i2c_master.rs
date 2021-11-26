@@ -4,14 +4,15 @@
 #![no_std]
 #![allow(unused_imports)]
 
+use cortex_m_rt as rt;
+use panic_halt;
+use stm32g0xx_hal as hal;
 use stm32g0xx_hal::cortex_m;
-extern crate cortex_m_rt as rt;
-extern crate panic_halt;
-extern crate stm32g0xx_hal as hal;
 
 use core::fmt::Write;
 use hal::i2c::Config;
-use hal::i2c::I2c;
+//use hal::i2c::I2c;
+use hal::i2c::blocking;
 use hal::prelude::*;
 use hal::rcc::{self, PllConfig};
 use hal::serial::FullConfig;

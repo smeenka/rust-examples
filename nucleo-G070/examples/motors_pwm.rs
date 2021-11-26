@@ -49,7 +49,7 @@ mod app {
         Parse,
         SetMotor,
         SetSpeed,
-        StopAll
+        StopAll,
     }
     #[derive(Clone, Debug, Copy)]
     pub enum Motor {
@@ -63,7 +63,7 @@ mod app {
     pub struct AppState {
         motor: Motor,
         command: Command,
-        pwm:usize,
+        pwm: usize,
         dir: Direction,
         m1a: PwmPin<TIM1, Channel1>,
         m1b: PwmPin<TIM1, Channel2>,
@@ -81,12 +81,12 @@ mod app {
     struct Shared {
         //exti: stm32::EXTI,
         counter: usize,
-        blink: PA5<Output<PushPull>>
+        blink: PA5<Output<PushPull>>,
     }
     #[local]
     struct Local {
         tim17: Timer<TIM17>,
-        state:AppState
+        state: AppState,
     }
 
     #[init()]
@@ -96,7 +96,7 @@ mod app {
         //let cfg = rcc::Config::hsi(rcc::Prescaler::Div8);
         //let cfg = rcc::Config::default();
         //let cfg = rcc::Config::pll();
-        let cfg = rcc::Config::hsi(rcc::Prescaler::NotDivided);          
+        let cfg = rcc::Config::hsi(rcc::Prescaler::NotDivided);
 
         let mut rcc = ctx.device.RCC.freeze(cfg);
         //rcc.enable_low_power_mode();
@@ -134,21 +134,21 @@ mod app {
 
         let mut blink = gpioa.pa5.into_push_pull_output();
 
-        let mut state = AppState{
-            pwm:0,
-            motor:Motor::Motor1,
-            command:Command::Parse,
-            dir:Direction::Forward,
-            m1a : pwm1.bind_pin(gpioa.pa8),
-            m1b : pwm1.bind_pin(gpioa.pa9),
-            m2a : pwm1.bind_pin(gpioa.pa10),
-            m2b : pwm1.bind_pin(gpioa.pa11),
-            m3a : pwm3.bind_pin(gpioa.pa6),
-            m3b : pwm3.bind_pin(gpioa.pa7),
-            m4a : pwm3.bind_pin(gpiob.pb0),
-            m4b : pwm3.bind_pin(gpiob.pb1),
+        let mut state = AppState {
+            pwm: 0,
+            motor: Motor::Motor1,
+            command: Command::Parse,
+            dir: Direction::Forward,
+            m1a: pwm1.bind_pin(gpioa.pa8),
+            m1b: pwm1.bind_pin(gpioa.pa9),
+            m2a: pwm1.bind_pin(gpioa.pa10),
+            m2b: pwm1.bind_pin(gpioa.pa11),
+            m3a: pwm3.bind_pin(gpioa.pa6),
+            m3b: pwm3.bind_pin(gpioa.pa7),
+            m4a: pwm3.bind_pin(gpiob.pb0),
+            m4b: pwm3.bind_pin(gpiob.pb1),
             txd,
-            rxd 
+            rxd,
         };
         state.m1a.enable();
         state.m1b.enable();
@@ -195,12 +195,12 @@ mod app {
     }
 
     // Parse the first letter of the command return true if succesfull
-    fn parseFirstLetter(state:&mut AppState) ->bool{
+    fn parseFirstLetter(state: &mut AppState) -> bool {
         // flush rx
         loop {
             match state.rxd.read() {
                 Err(nb::Error::WouldBlock) => break,
-                _ => ()
+                _ => (),
             }
         }
         let mut result = true;
@@ -208,25 +208,21 @@ mod app {
 
         state.command = match c as char {
             // skip spaces
-            'm' | 'M' =>  {
-                Command::SetMotor 
-            },
-            'h' | 'H' => { 
+            'm' | 'M' => Command::SetMotor,
+            'h' | 'H' => {
                 giveHelp(&mut state.txd);
                 result = false;
                 Command::Parse
-            },
+            }
             'f' | 'F' => {
                 state.dir = Direction::Forward;
                 Command::SetSpeed
-            },
+            }
             'b' | 'B' => {
                 state.dir = Direction::Backward;
                 Command::SetSpeed
-            },
-            's' | 'S' => {
-                Command::SetSpeed
-            },
+            }
+            's' | 'S' => Command::SetSpeed,
             _ => {
                 writeln!(state.txd, "Unknown command\r").unwrap();
                 giveHelp(&mut state.txd);
@@ -238,11 +234,11 @@ mod app {
     }
 
     // Parse the second letter of the command return true if succesfull
-    fn parseSecondLetter(state:&mut AppState) ->bool{
+    fn parseSecondLetter(state: &mut AppState) -> bool {
         // read character until not a space
         let mut c = 32;
         while c == 32 {
-            c  = block!(state.rxd.read()).unwrap();
+            c = block!(state.rxd.read()).unwrap();
         }
         //writeln!(state.txd, "Reached second state: Second state command {:?} \r", state.command);
         match state.command {
@@ -255,7 +251,7 @@ mod app {
                     '4' => Motor::Motor4,
                     _ => {
                         writeln!(state.txd, "Allowed motor 0..4 \r").unwrap();
-                        return false
+                        return false;
                     }
                 };
             }
@@ -264,20 +260,25 @@ mod app {
                     '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => c - 0x30,
                     _ => {
                         writeln!(state.txd, "Allowed speed 0..9\r").unwrap();
-                        return false
+                        return false;
                     }
                 };
                 let max1 = state.m1a.get_max_duty() as usize;
                 state.pwm = (max1 * inp as usize) / 10;
-            },
+            }
             _ => (),
         };
         true
     }
 
-    fn execute(state:&mut AppState){
-        writeln!(state.txd, "Execute command {:?} dir {:?} pwm {} \r", state.command, state.dir, state.pwm).unwrap();
-    
+    fn execute(state: &mut AppState) {
+        writeln!(
+            state.txd,
+            "Execute command {:?} dir {:?} pwm {} \r",
+            state.command, state.dir, state.pwm
+        )
+        .unwrap();
+
         let mut mpos = 0;
         let mut mneg = 0;
         match state.dir {
@@ -288,19 +289,19 @@ mod app {
             Motor::Motor1 => {
                 state.m1a.set_duty(mpos as u16);
                 state.m1b.set_duty(mneg as u16);
-            },
+            }
             Motor::Motor2 => {
                 state.m2a.set_duty(mpos as u16);
                 state.m2b.set_duty(mneg as u16);
-            },
+            }
             Motor::Motor3 => {
                 state.m3a.set_duty(mpos as u32);
                 state.m3b.set_duty(mneg as u32);
-            },
+            }
             Motor::Motor4 => {
                 state.m4a.set_duty(mpos as u32);
                 state.m4b.set_duty(mneg as u32);
-            },
+            }
             Motor::MotorAll => {
                 state.m1a.set_duty(mpos as u16);
                 state.m1b.set_duty(mneg as u16);
@@ -330,5 +331,4 @@ mod app {
         blink.lock(|b| b.toggle().unwrap());
         ctx.local.tim17.clear_irq();
     } // tim 17
-
 }
