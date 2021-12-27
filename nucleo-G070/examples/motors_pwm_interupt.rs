@@ -340,7 +340,7 @@ mod app {
         let mut counter = ctx.local.counter;
 
         *counter += 1;
-        if *counter % 50 == 0 {
+        if *counter % 80 == 0 {
             blink.toggle().unwrap();
         }
         ctx.local.pwm3.clear_irq();

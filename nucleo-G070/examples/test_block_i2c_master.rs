@@ -45,7 +45,7 @@ fn main() -> ! {
 
     writeln!(
         usart,
-        "i2c master test. Should be used together with i2c_test\r"
+        "Blocking i2c master test. Should be used together with one of test_*_slave tests\r"
     )
     .unwrap();
 
@@ -60,6 +60,8 @@ fn main() -> ! {
     let mut buf_short: [u8; 20] = [0; 20]; //
     let mut buf_rcv: [u8; 20] = [0; 20]; //
     let mut buf_10: [u8; 10] = [0; 10]; //
+    let mut buf_io = [0_u8;1];
+
     delay.delay(100.ms());
     loop {
         writeln!(usart, "\r\rStart of test\r").unwrap();
@@ -188,6 +190,22 @@ fn main() -> ! {
             Err(err) => writeln!(usart, "Test 0x4F unexpected error: {:?}\r", err).unwrap(),
         }
         writeln!(usart, "\r").unwrap();
+        let mut joyb = [0_u8;3];
+        match i2c.read(0x52, &mut joyb) {
+            Ok(_) => {
+                write!(usart, "Test 0x52 Ok ").unwrap();
+                for i in 0..joyb.len() {
+                    write!(usart, " {} ", joyb[i] as char).unwrap();
+                }
+                writeln!(usart, "\r").unwrap();
+            }
+            Err(err) => writeln!(usart, "Test 0x52 unexpected error: {:?}\r", err).unwrap(),
+        }
+        match i2c.write(0x21, &mut buf_io) {
+            Ok(_) => (),
+            Err(err) => writeln!(usart, "Test 0x21 unexpected error: {:?}\r", err).unwrap(),
+        }
+        buf_io[0] += 1;
         delay.delay(10_000.ms());
     }
 }

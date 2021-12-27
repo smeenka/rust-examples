@@ -13,7 +13,7 @@ extern crate stm32g0xx_hal as hal;
 use hal::gpio::gpioa::PA5;
 use hal::prelude::*;
 use hal::rcc::{self, PllConfig};
-use hal::spi;
+use hal::spi::{NoMiso,NoSck};
 use hal::stm32;
 use rt::entry;
 use smart_leds::{SmartLedsWrite, RGB};
