@@ -92,7 +92,7 @@ mod app {
         let sda = gpiob.pb9.into_open_drain_output();
         let scl = gpiob.pb8.into_open_drain_output();
         let mut configi2c = hal::i2c::Config::with_timing(0x2020_151b);
-        configi2c.slave_address(0x30);
+        configi2c.slave_address(0x61);
         configi2c.slave_address_2(0x40, SlaveAddressMask::MaskFourBits);
     
         let mut i2c = ctx.device.I2C1.i2c(sda, scl, configi2c, &mut rcc);
@@ -146,7 +146,6 @@ mod app {
 
         let mut ready = false;
         loop {
-            txd.lock(|txd | { writeln!(txd, "\r\rHello I am alive\r").unwrap(); });
             delay.delay(10_000.ms());
         }
     }
@@ -173,40 +172,49 @@ mod app {
         let mut count = ctx.local.count;
 
         (i2c, txd).lock(|i2c, txd| {
-            let address = i2c.get_address();
+            let mut address = i2c.get_address();
             match i2c.check_isr_flags(){
                 Ok( b) => {
                     match b {
-                    I2cResult::Addressed(ad, dir) => {
+                        I2cResult::Addressed(ad, dir) => {
+                            write!(txd, "Address {:x}, ", ad).unwrap();
                             addressed_case(txd, i2c as &mut I2cSlave, ad, dir, count,errors);
                         },     
-                    I2cResult::Data(d) => 
-                        // prevent too many output from the i2c extender output
-                        if address != 0x21 {
-                            for i in 0..d.len() {
-                                write!(txd, "{}", d[i] as char).unwrap();
+                        I2cResult::Data(d) => {
+                                write!(txd, " len {}, ", d.len()).unwrap();
+                                for i in 0..d.len() {
+                                    write!(txd, "{}", d[i] as char).unwrap();
+                                }
+                                writeln!(txd, "\r").unwrap();
+                                irq_ok_case(txd, i2c as &mut I2cSlave, address, &mut errors);
                             }
-                            writeln!(txd, "!\r").unwrap();
-                            irq_ok_case(txd, i2c as &mut I2cSlave, address);
                         }
-                    }
+                    
                 },
                 Err(nb::Error::WouldBlock) => (), // ignore the WouldBlock error
                 Err(err) => {
-                    *errors += 1;
-                    irq_bad_case(txd, i2c as &mut I2cSlave, address, err)
+                    writeln!(txd, "\r").unwrap();
+                    irq_bad_case(txd, i2c as &mut I2cSlave, address, err, &mut errors)
                 },
             }
         });
     } // I2C
 
     fn addressed_case(txd: &mut Tx<USART2,FullConfig>, i2c:  &mut dyn I2cSlave, address:u16, dir:I2cDirection, count:&mut usize, errors:&mut usize){
-        writeln!(txd, "Addressed {:x} dir {:?}\r", address, dir ).unwrap();
         let mut buf_long: [u8; 50] = [0; 50]; //
         let mut buf_short: [u8; 20] = [0; 20]; //
 
         *count += 1;    
         match address {
+            0x61 => {
+                // slave address  will be changed to 0x21 after successfull read
+                let _ = i2c.slave_read(20);
+
+            },
+            0x21 => {
+                // slave address  will be changed to 0x61 after successfull read
+                let _ = i2c.slave_read(20);
+            },
             0x41 => {
                 // 0x41 good case master write slave read: master does send 20 bytes slave receives 20 bytes
                 checkIsWrite!(txd, dir);
@@ -231,11 +239,8 @@ mod app {
                     },
                     I2cDirection::MasterReadSlaveWrite => {
                         i2c.slave_sbc(true);
-                        let buf_short = [1_u8;20];
-                        let _ = i2c.slave_write(&buf_short); 
-                    },
-                    _ => {
-                        writeln!(txd, "UU\r").unwrap();
+                        let buf = [0x31_u8;20];
+                        let _ = i2c.slave_write(&buf); 
                     }
                 };
             },
@@ -266,7 +271,7 @@ mod app {
             },
             0x4F => {
                 checkIsRead!(txd, dir);
-                let result: [u8; 2] = [0,0];
+                let result: [u8; 2] = [*count as u8, *errors as u8 ];
                 let _ =  i2c.slave_write(&result); 
                 writeln!(
                     txd,
@@ -283,31 +288,34 @@ mod app {
 
     }
 
-    fn irq_ok_case(txd: &mut Tx<USART2,FullConfig>, i2c:  &dyn I2cSlave, address:u16) {
+    fn irq_ok_case(txd: &mut Tx<USART2,FullConfig>, i2c:  &mut dyn I2cSlave, address:u16, errors:&mut usize) {
         match address {
-            // 0x20 i2c IO extender with 8 leds
-            0x20 => (),
-    
-            // 0x41 good case master write slave read: master does send 20 bytes slave receives 20 bytes
-            0x61 =>writeln!(txd, "Test 1 Error: would expect nack\r").unwrap(),
-    
+            0x21 => {
+                writeln!(txd, "Test 0x21: Ok, will change address 1 to 0x61\r").unwrap();
+                i2c.set_address(0x61);
+            },
+            0x61 => {
+                writeln!(txd, "Test 0x61: Ok, will change address 1 to 0x21\r").unwrap();
+                i2c.set_address(0x21);
+            },
             // 0x41 good case master write slave read: master does send 20 bytes slave receives 20 bytes
             0x41 => writeln!(txd, "Test 0x41 Ok\r").unwrap(),
             // 0x42 bad case master write slave read: master does send less than 20 bytes
             0x42 => writeln!(
                         txd,
-                        "Test 0x42 Ok. (Master cannot detect that frame is too short)  \r"
+                        "Test 0x42 Ok. (Slave cannot detect that frame is too short)  \r"
                     )
                     .unwrap(),
             // 0x43 bad case master write slave read: master does send more than 20 bytes, slave does NACK
-            0x43 => writeln!(
+            0x43 => { 
+                    writeln!(
                         txd,
-                        "Test 0x43 not ok expected error IncorrectFramesize: \r"
+                        "Test 0x43 Ok Slave cannot detect that frame is too long: \r"
                     )
-                    .unwrap(),
+                    .unwrap()},
             // 0x44 master write_read good case: master sends and expects 20 bytes
             0x44 => {
-                    write!(txd, "Test 0x44 Ok ").unwrap();
+                    writeln!(txd, "Test 0x44 Ok\r ").unwrap();
             
                     writeln!(
                         txd,
@@ -316,41 +324,32 @@ mod app {
                     .unwrap();
                 },
             0x48 => {
-                    write!(txd, "Test 0x48 Ok ").unwrap();
+                    writeln!(txd, "Test 0x48 Ok \r").unwrap();
                 },
             // 0x49 master read slave write bad  case: master expects 50 slave does send 20 characters
             0x49 => {
-                    write!(txd, "Test 0x49 Ok ").unwrap();
+                    writeln!(txd, "Test 0x49 Ok \r").unwrap();
                 },
             // 0x4A master read slave write bad  case: master expects 20 does slave does send 50 characters
             0x4A => {
-                    write!(txd, "Test 0x4A Ok ").unwrap();
-                    writeln!(txd, "\r").unwrap();
+                    *errors +=1;
+                    writeln!(txd, "Test 0x4A Error Expected incorrect framesize \r").unwrap();
                 },
-            // 0x4F test end and slave will present results
-            0x4F => {
-                    write!(
-                        txd,
-                        "Result of the whole test as reported by the slave count/errors: {}/{}\r\r",
-                        0,0
-                        //result[0], result[1]
-                    )
-                    .unwrap();
-                },
-            _ => (),    
+            0x4F => (),
+            _ => writeln!(txd, "Unexpected good case\r").unwrap()
         }
     }
     
-    fn irq_bad_case(txd: &mut Tx<USART2,FullConfig>, i2c:  &dyn I2cSlave, address:u16, err:nb::Error<Error>) {
+    fn irq_bad_case(txd: &mut Tx<USART2,FullConfig>, i2c:  &dyn I2cSlave, address:u16, err:nb::Error<Error>, errors:&mut usize) {
         match address {
-        // 0x20 i2c IO extender with 8 leds
-        0x20 => writeln!(txd, "Test 0x20 i2c extender not found got error: {:?}\r", err).unwrap(),
+        // 0x21 bad case expect NACK
+        0x21 => writeln!(txd, "Test 0x21 OK expected NACK error: {:?}\r", err).unwrap(),
     
         // 0x61 bad case expect NACK
-        0x61 => writeln!(txd, "Test 0x61 OK: expected NACK error: {:?}\r", err).unwrap(),
+        0x61 => writeln!(txd, "Test 0x61 OK expected NACK error: {:?}\r", err).unwrap(),
     
         // 0x41 good case master write slave read: master does send 20 bytes slave receives 20 bytes
-        0x41 => writeln!(txd, "Test 0x41 Error: {:?}\r", err).unwrap(),
+        0x41 => {*errors += 1; writeln!(txd, "Test 0x41 Error: {:?}\r", err).unwrap()},
     
         // 0x42 bad case master write slave read: master does send less than 20 bytes
         0x42 => writeln!(txd, "Test 0x42 error IncorrectFramesize: {:?}\r", err).unwrap(),
@@ -358,26 +357,26 @@ mod app {
         // 0x43 bad case master write slave read: master does send more than 20 bytes, slave does NACK
         0x43 => writeln!(
                 txd,
-                "Test 0x43 Ok Expected IncorrectFrameSize: {:?}\r",
+                "Test 0x43 not Ok Error: {:?}\r",
                 err
             )
             .unwrap(),
         
         // 0x44 master write_read good case: master sends and expects 20 bytes
-        0x44 => writeln!(txd, "Test 0x44 error: {:?}\r", err).unwrap(),
+        0x44 => {*errors +=1; writeln!(txd, "Test 0x44 error: {:?}\r", err).unwrap()},
         
         // 0x48 master read slave write good case: exact 20 characters
-        0x48 => writeln!(txd, "Test 0x48 unexpected error: {:?}\r", err).unwrap(),
+        0x48 => {*errors += 1; writeln!(txd, "Test 0x48 unexpected error: {:?}\r", err).unwrap()},
         
         // 0x49 master read slave write bad  case: master expects 50 slave does send 20 characters
         0x49 => writeln!(txd, "Test 0x49 error: {:?}\r", err).unwrap(),
         
         // 0x4A master read slave write bad  case: master expects 20 does slave does send 50 characters
-        0x4A => writeln!(txd, "Test 0x4A error: {:?}\r", err).unwrap(),
+        0x4A => writeln!(txd, "Test 0x4A Ok Got expected  error: {:?}\r", err).unwrap(),
         
         // 0x4F test end and slave will present results
         0x4F => writeln!(txd, "Test 0x4F unexpected error: {:?}\r", err).unwrap(),
-        _ => ()
+        _ => writeln!(txd, "Unexpected error: {:?}\r", err).unwrap()
         }
     }
     

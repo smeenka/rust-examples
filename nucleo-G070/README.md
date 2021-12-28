@@ -56,17 +56,60 @@ Please use next lines in cargo.toml:
 To build and run this example:
 *  cargo embed --example motors_pwm 
 
-## i2c_master i2c_slave
+## test_block_i2c_master test_block_i2c_slave
 
 This test should be used with 2 (nucleo) boards with i2c connected.
+You have to check if uart is correct, as I use one nucleo board, and one board of my onw with different setting.
 On one board load the master test:
-*  cargo embed --example i2c_master
+*  cargo embed --example test_block_i2c_master
 On the other board load the slave test
-*  cargo embed --example i2c_slave
+*  cargo embed --example test_block_i2c_slave
 
-The blocking variant of i2c is tested. Note that the i2c driver is on a feature branch of stm32g0xx-hal
+The blocking variant of i2c is tested. 
 
 The test will check:
 * 2 good case for sending and reading from master to slave
 * bad cases where the frame size is not correct between master and slave
 * one good case for the master write_read with subaddressing
+
+[dependencies.stm32g0xx-hal]
+default-features = false
+features = ["rt", "stm32g070", "i2c-blocking"]
+
+
+## test_rtic_i2c_master test_rtic_i2c_slave
+
+This test should be used with 2 (nucleo) boards with i2c connected.
+You have to check if uart is correct, as I use one nucleo board, and one board of my onw with different setting.
+On one board load the master test:
+*  cargo embed --example test_rtic_i2c_master
+On the other board load the slave test
+*  cargo embed --example test_rtic_i2c_slave
+
+The non-blocking variant of i2c is tested with RTIC.
+
+The test will check:
+* Address change capacibility of the slave
+* 2 good case for sending and reading from master to slave
+* bad cases where the frame size is not correct between master and slave
+* one good case for the master write_read with subaddressing
+* One can test the watchdog capability by disconnecting and connecting the slave at any time.
+* The watchdog does prevent the i2c bus from hanging!
+
+Note that the blocking and nonblocking variants in the test can be interchanged.
+
+[dependencies.stm32g0xx-hal]
+default-features = false
+features = ["rt", "stm32g070", "i2c-nonblocking"]
+
+
+## nb_i2c_master_simple
+
+Test the non-blocking variant of the master in blocking mode with the block! macro.
+And IO expander (with leds connected) at address 0x20 should be connected and/or an M5 joystick on address 
+0x52.
+Note that both on the bus leads to buserrors, possible due to voltage incompatibility (3.3 and 5 V).
+
+[dependencies.stm32g0xx-hal]
+default-features = false
+features = ["rt", "stm32g070", "i2c-nonblocking"]

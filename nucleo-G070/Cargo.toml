@@ -24,9 +24,9 @@ version = "0.13.0"
 default-features = false
 features = ["rt", "stm32g070", "i2c-nonblocking"]
 version = "0.1.2"
-path = "/data/workspace/rust/stmg0/stm32g0xx-hal"
-#git = "https://github.com/smeenka/stm32g0xx-hal"
-#branch = "feature/pwm-interrupts"
+#path = "/data/workspace/rust/stmg0/stm32g0xx-hal"
+git = "https://github.com/smeenka/stm32g0xx-hal"
+branch = "feature/i2c-nonblocking"
 #git="https://github.com/stm32-rs/stm32g0xx-hal"
 
 [dependencies.ws2812-spi]

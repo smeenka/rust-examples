@@ -83,7 +83,7 @@ mod app {
         let (mut txd, mut rxd) = serial.split(); 
 
         writeln!(txd, "I2c with RTIC simple example.\r").unwrap();        
-        writeln!(txd, "Connect a IO expander on address i2c address 0x40 for output.\r").unwrap();        
+        writeln!(txd, "Connect a IO expander on address i2c address 0x20 for output.\r").unwrap();        
         writeln!(txd, "Connect a M5 Joystick on address 0x52 (x2) for input.\r").unwrap();        
 
         let mut counter:usize = 1;
@@ -124,10 +124,17 @@ mod app {
             writeln!(txd, "Counter:{}\r", counter ).unwrap();        
             
             buf_short[0] = *counter as u8;
-            match i2c.master_write(0x20, &buf_short) {
-                Ok(_) => (),
-                Err(err) => writeln!(txd, "0x20 Write Error:{:?}\r", err).unwrap(),
-            };
+            if *counter%2 == 0 {
+                match i2c.master_write(0x20, &buf_short) {
+                    Ok(_) => (),
+                    Err(err) => writeln!(txd, "0x20 Write Error:{:?}\r", err).unwrap(),
+                };
+            }else{
+                match i2c.master_read(0x52, 3) {
+                    Ok(_) => (),
+                    Err(err) => writeln!(txd, "0x52 Write Error:{:?}\r", err).unwrap(),
+                };
+            }
         });
         ctx.local.tim17.clear_irq();
 
@@ -141,7 +148,7 @@ mod app {
         (i2c, txd).lock(|i2c, txd| {
             match i2c.check_isr_flags(){
                 Ok( b) => writeln!(txd, "Ok {:?}\r", b ).unwrap(),
-                Err(nb::Error::WouldBlock) => writeln!(txd, "0x20 irq Expected WouldBlock\r").unwrap(),
+                Err(nb::Error::WouldBlock) => (), // ignore WouldBlock
                 Err(err) => writeln!(txd, "0x20 irq Error: {:?}\r", err).unwrap(),
             }
         });

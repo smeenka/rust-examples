@@ -19,7 +19,7 @@ mod app {
     use hal::gpio::gpiob::{PB5, PB8, PB9};
     use hal::gpio::{Output, PushPull, Analog};
     use hal::prelude::*;
-    use hal::stm32::USART2;
+    use hal::stm32::{USART2,USART1};
     use hal::stm32::I2C1;
     use hal::rcc::{self, PllConfig};    
     use hal::timer::{Timer,Channel1,Channel2,Channel3,Channel4};
@@ -37,7 +37,7 @@ mod app {
     struct Shared {
         //exti: stm32::EXTI,
         counter:usize,
-        txd:   Tx<USART2,FullConfig>,
+        txd:   Tx<USART1,FullConfig>,
         i2c:   I2c<I2C1, PB9<Output<OpenDrain>>, PB8<Output<OpenDrain>>>,
     }
 
@@ -73,10 +73,10 @@ mod app {
         let mut delay = ctx.device.TIM15.delay(&mut rcc);
 
 
-        let mut serial = ctx.device.USART2
-            .usart(gpioa.pa2, gpioa.pa3,  
         //let mut serial = ctx.device.USART2
-        //    .usart(gpiob.pb6, gpiob.pb7,  
+        //    .usart(gpioa.pa2, gpioa.pa3,  
+        let mut serial = ctx.device.USART1
+            .usart(gpiob.pb6, gpiob.pb7,  
             FullConfig::default()
                 .baudrate(115200.bps())
                 .fifo_enable()
@@ -121,15 +121,26 @@ mod app {
         let mut buf_io = [0_u8;1];
     
 
-        let mut ready = false;
         loop {
+            let mut ready = false;
             txd.lock(|txd | { writeln!(txd, "\r\rStart of test\r").unwrap(); });
 
-            // test 1: slave address 0x61 should not be addressable
+            // test 0x21: slave address 0x21 should be addressable half the cases
             for i in 0..buf_short.len() {
-                buf_short[i] = 0x41 + (i as u8)
+                buf_short[i] = 0x21 + (i as u8)
             }
-            
+            while !ready {
+                i2c.lock(|i2c| {
+                    ready =  ! matches!( i2c.master_write(0x21, &buf_short), Err(nb::Error::WouldBlock))  
+                });
+            }
+            ready = false; delay.delay(10.ms());
+
+            // test 0x61: slave address 0x61 should be addressable half the cases
+            for i in 0..buf_short.len() {
+                buf_short[i] = 0x61 + (i as u8)
+            }
+
             while !ready {
                 i2c.lock(|i2c| {
                     ready =  ! matches!( i2c.master_write(0x61, &buf_short), Err(nb::Error::WouldBlock))  
@@ -226,10 +237,10 @@ mod app {
         (i2c, counter ).lock(|i2c, counter| {
             *counter += 1;
             
-            buf_short[0] = *counter as u8;
-            // ignore result ignore failure due to i2c bus busy
             // concurrent acces does not work yet, internal state gets confused
+            // buf_short[0] = *counter as u8;
             //let _ = i2c.master_write(0x21, &buf_short);  
+            i2c.execute_watchdog();
         });
         ctx.local.tim17.clear_irq();
 
@@ -250,7 +261,13 @@ mod app {
                         },     
                     I2cResult::Data(d) => 
                         // prevent too many output from the i2c extender output
-                        if address != 0x21 {
+                        if address == 0x4f {
+                            write!(
+                                txd,
+                                "Result of the whole test as reported by the slave count/errors: {}/{}\r\r",
+                                d[0],d[1]
+                            ).unwrap();
+                        }else {
                             for i in 0..d.len() {
                                 write!(txd, "{}", d[i] as char).unwrap();
                             }
@@ -265,13 +282,14 @@ mod app {
         });
     } // I2C
 
-    fn irq_ok_case(txd: &mut Tx<USART2,FullConfig>, i2c:  &dyn I2cMaster, address:u16) {
+    fn irq_ok_case(txd: &mut Tx<USART1,FullConfig>, i2c:  &dyn I2cMaster, address:u16) {
         match address {
             // 0x20 i2c IO extender with 8 leds
             0x20 => (),
     
-            // 0x41 good case master write slave read: master does send 20 bytes slave receives 20 bytes
-            0x61 =>writeln!(txd, "Test 1 Error: would expect nack\r").unwrap(),
+            // test that the slave can change its address dynamically
+            0x21 =>writeln!(txd, "Test 0x21 Found slave!\r").unwrap(),
+            0x61 =>writeln!(txd, "Test 0x61 Found slave!\r").unwrap(),
     
             // 0x41 good case master write slave read: master does send 20 bytes slave receives 20 bytes
             0x41 => writeln!(txd, "Test 0x41 Ok\r").unwrap(),
@@ -309,27 +327,15 @@ mod app {
                     write!(txd, "Test 0x4A Ok ").unwrap();
                     writeln!(txd, "\r").unwrap();
                 },
-            // 0x4F test end and slave will present results
-            0x4F => {
-                    write!(
-                        txd,
-                        "Result of the whole test as reported by the slave count/errors: {}/{}\r\r",
-                        0,0
-                        //result[0], result[1]
-                    )
-                    .unwrap();
-                },
             _ => (),    
         }
     }
     
-    fn irq_bad_case(txd: &mut Tx<USART2,FullConfig>, i2c:  &dyn I2cMaster, address:u16, err:nb::Error<Error>) {
+    fn irq_bad_case(txd: &mut Tx<USART1,FullConfig>, i2c:  &dyn I2cMaster, address:u16, err:nb::Error<Error>) {
         match address {
-        // 0x20 i2c IO extender with 8 leds
-        0x20 => writeln!(txd, "Test 0x20 i2c extender not found got error: {:?}\r", err).unwrap(),
-    
-        // 0x61 bad case expect NACK
-        0x61 => writeln!(txd, "Test 0x61 OK: expected NACK error: {:?}\r", err).unwrap(),
+   
+        0x21 => writeln!(txd, "Test 0x21 error: {:?}\r", err).unwrap(),
+        0x61 => writeln!(txd, "Test 0x61 error: {:?}\r", err).unwrap(),
     
         // 0x41 good case master write slave read: master does send 20 bytes slave receives 20 bytes
         0x41 => writeln!(txd, "Test 0x41 Error: {:?}\r", err).unwrap(),

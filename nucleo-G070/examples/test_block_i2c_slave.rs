@@ -52,17 +52,17 @@ fn main() -> ! {
     let gpioa = dp.GPIOA.split(&mut rcc);
 
     let config_uart = FullConfig::default();
-    /*
+    
     let mut usart = dp
         .USART2
         .usart(gpioa.pa2, gpioa.pa3, config_uart, &mut rcc)
         .unwrap();
-    */
+    /*
     let mut usart = dp
         .USART1
         .usart(gpiob.pb6, gpiob.pb7, config_uart, &mut rcc)
         .unwrap();
-
+    */
 
     writeln!(
         usart,

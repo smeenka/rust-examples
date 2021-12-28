@@ -10,7 +10,7 @@ extern crate panic_halt;
 extern crate stm32g0xx_hal as hal;
 
 use core::fmt::Write;
-use hal::i2c::blocking::I2cSlave;
+use hal::i2c::nonblocking::I2cSlave;
 use hal::i2c::{Config, Error, I2cDirection, SlaveAddressMask};
 use hal::prelude::*;
 use hal::rcc::{self, PllConfig};
@@ -58,7 +58,7 @@ fn main() -> ! {
         .unwrap();
     writeln!(
         usart,
-        "i2c slave test. Should be used together with i2c_master\r"
+        "NON blockingi2c slave test. Should be used together with i2c_master\r"
     )
     .unwrap();
 
