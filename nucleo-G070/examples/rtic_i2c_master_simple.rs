@@ -130,9 +130,9 @@ mod app {
                     Err(err) => writeln!(txd, "0x20 Write Error:{:?}\r", err).unwrap(),
                 };
             }else{
-                match i2c.master_read(0x52, 3) {
+                match i2c.master_read(0x4, 1) {
                     Ok(_) => (),
-                    Err(err) => writeln!(txd, "0x52 Write Error:{:?}\r", err).unwrap(),
+                    Err(err) => writeln!(txd, "0x4 Write Error:{:?}\r", err).unwrap(),
                 };
             }
         });
@@ -147,9 +147,12 @@ mod app {
 
         (i2c, txd).lock(|i2c, txd| {
             match i2c.check_isr_flags(){
-                Ok( b) => writeln!(txd, "Ok {:?}\r", b ).unwrap(),
+                Ok( b) => (), //writeln!(txd, "Ok {:?}\r", b ).unwrap(),
                 Err(nb::Error::WouldBlock) => (), // ignore WouldBlock
-                Err(err) => writeln!(txd, "0x20 irq Error: {:?}\r", err).unwrap(),
+                Err(err) => 
+                {   let address = i2c.get_address();
+                    writeln!(txd, "Error addr {:x} error:{:?}\r", address,err).unwrap();
+                }
             }
         });
     } // I2C

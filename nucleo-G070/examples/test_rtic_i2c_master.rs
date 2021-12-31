@@ -271,7 +271,7 @@ mod app {
                                 write!(txd, "{}", d[i] as char).unwrap();
                             }
                             writeln!(txd, "!\r").unwrap();
-                            irq_ok_case(txd, i2c as &mut I2cMaster, address);
+                            irq_ok_case(txd, i2c, address);
                         }
                     }
                 },
