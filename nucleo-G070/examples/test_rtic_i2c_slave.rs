@@ -172,7 +172,6 @@ mod app {
         let mut count = ctx.local.count;
 
         (i2c, txd).lock(|i2c, txd| {
-            let mut address = i2c.get_address();
             match i2c.check_isr_flags(){
                 Ok( b) => {
                     match b {
@@ -180,7 +179,7 @@ mod app {
                             write!(txd, "Address {:x}, ", ad).unwrap();
                             addressed_case(txd, i2c as &mut I2cSlave, ad, dir, count,errors);
                         },     
-                        I2cResult::Data(d) => {
+                        I2cResult::Data(address, _, d) => {
                                 write!(txd, " len {}, ", d.len()).unwrap();
                                 for i in 0..d.len() {
                                     write!(txd, "{}", d[i] as char).unwrap();
@@ -194,7 +193,7 @@ mod app {
                 Err(nb::Error::WouldBlock) => (), // ignore the WouldBlock error
                 Err(err) => {
                     writeln!(txd, "\r").unwrap();
-                    irq_bad_case(txd, i2c as &mut I2cSlave, address, err, &mut errors)
+                    irq_bad_case(txd, i2c as &mut I2cSlave, err, &mut errors)
                 },
             }
         });
@@ -340,7 +339,8 @@ mod app {
         }
     }
     
-    fn irq_bad_case(txd: &mut Tx<USART2,FullConfig>, i2c:  &dyn I2cSlave, address:u16, err:nb::Error<Error>, errors:&mut usize) {
+    fn irq_bad_case(txd: &mut Tx<USART2,FullConfig>, i2c:  &dyn I2cSlave, err:nb::Error<Error>, errors:&mut usize) {
+        let address = i2c.get_address();
         match address {
         // 0x21 bad case expect NACK
         0x21 => writeln!(txd, "Test 0x21 OK expected NACK error: {:?}\r", err).unwrap(),

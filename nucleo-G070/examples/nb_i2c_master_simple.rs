@@ -12,7 +12,7 @@ use stm32g0xx_hal::cortex_m;
 use core::fmt::Write;
 use hal::i2c::{Config};
 //use hal::i2c::I2c;
-use hal::i2c::nonblocking::{I2cMaster, I2cControl};
+use hal::i2c::{I2cMaster, I2cControl, I2cResult};
 use hal::prelude::*;
 use hal::rcc::{self, PllConfig};
 use hal::serial::FullConfig;
@@ -66,7 +66,10 @@ fn main() -> ! {
         // test a master read, but with incorrect data size (2) as the slave wil try to send 3 bytes
         block!(i2c.master_read(0x52, 2));
         match block!(i2c.check_isr_flags()){
-            Ok( b) => writeln!(usart, "Joystick: x:{:x} y:{:x} no third byte read \r", b[0],b[1]).unwrap(),
+            Ok(b) => match b{
+                I2cResult::Data(_,_,d) => writeln!(usart, "Joystick: x:{:x} y:{:x} button {} \r", d[0],d[1], d[2]).unwrap(),
+                _ => (),
+            },
             Err(err) => writeln!(usart, "0x52 Error: {:?}\r", err).unwrap(),
         }
         // test non existing address, expect a NACK
@@ -82,7 +85,7 @@ fn main() -> ! {
             Err(err) => writeln!(usart, "0x21 Error: {:?}\r", err).unwrap(),
         }
         // test write with subaddressingexisting address, expect Ok
-        block!(i2c.master_write_restart(0x21, &buf_ioext)); 
+        block!(i2c.master_write_read(0x21, &buf_ioext, 1)); 
         match block!(i2c.check_isr_flags()){
             Ok(_) => (),
             Err(err) => writeln!(usart, "0x21 restart Error: {:?}\r", err).unwrap(),
@@ -90,7 +93,10 @@ fn main() -> ! {
         // do a read to finish the master write with sub addressing
         block!(i2c.master_read(0x52, 3)); 
         match block!(i2c.check_isr_flags()){
-            Ok( b) => writeln!(usart, "Joystick: x:{:x} y:{:x} button {} \r", b[0],b[1], b[2]).unwrap(),
+            Ok(b) => match b{
+                I2cResult::Data(_,_,d) => writeln!(usart, "Joystick: x:{:x} y:{:x} button {} \r", d[0],d[1], d[2]).unwrap(),
+                _ => (),
+            },
             Err(err) => writeln!(usart, "0x52 Error: {:?}\r", err).unwrap(),
         }
         delay.delay(100.ms());

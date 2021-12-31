@@ -252,14 +252,13 @@ mod app {
         let mut i2c = ctx.shared.i2c;
 
         (i2c, txd).lock(|i2c, txd| {
-            let address = i2c.get_address();
             match i2c.check_isr_flags(){
                 Ok( b) => {
                     match b {
                     I2cResult::Addressed(ad, dir) => {
                             writeln!(txd, "Addressed {:?} dir {:?}\r", ad, dir ).unwrap();
                         },     
-                    I2cResult::Data(d) => 
+                    I2cResult::Data(address,_, d) => 
                         // prevent too many output from the i2c extender output
                         if address == 0x4f {
                             write!(
@@ -277,7 +276,7 @@ mod app {
                     }
                 },
                 Err(nb::Error::WouldBlock) => (), // ignore the WouldBlock error
-                Err(err) => irq_bad_case(txd, i2c as &mut I2cMaster, address, err),
+                Err(err) => irq_bad_case(txd, i2c as &mut I2cMaster, err),
             }
         });
     } // I2C
@@ -331,7 +330,8 @@ mod app {
         }
     }
     
-    fn irq_bad_case(txd: &mut Tx<USART1,FullConfig>, i2c:  &dyn I2cMaster, address:u16, err:nb::Error<Error>) {
+    fn irq_bad_case(txd: &mut Tx<USART1,FullConfig>, i2c:  &dyn I2cMaster, err:nb::Error<Error>) {
+        let address = i2c.get_address();
         match address {
    
         0x21 => writeln!(txd, "Test 0x21 error: {:?}\r", err).unwrap(),

@@ -1,5 +1,6 @@
 # NUCLE0-g070rb examples
 
+
 ## Blink 
 ---
 Blink the led on the NUCLE0-g070rb  board with an STM32G070 chip
@@ -56,10 +57,10 @@ Please use next lines in cargo.toml:
 To build and run this example:
 *  cargo embed --example motors_pwm 
 
-## test_block_i2c_master test_block_i2c_slave
+## test_block_i2c_master and test_block_i2c_slave
 
 This test should be used with 2 (nucleo) boards with i2c connected.
-You have to check if uart is correct, as I use one nucleo board, and one board of my onw with different setting.
+You have to check if uart is correct, as I use one nucleo board, and a board  with different uart settings.
 On one board load the master test:
 *  cargo embed --example test_block_i2c_master
 On the other board load the slave test
@@ -72,15 +73,16 @@ The test will check:
 * bad cases where the frame size is not correct between master and slave
 * one good case for the master write_read with subaddressing
 
-[dependencies.stm32g0xx-hal]
-default-features = false
-features = ["rt", "stm32g070", "i2c-blocking"]
+Cargo.toml:
+
+    [dependencies.stm32g0xx-hal]
+    features = ["rt", "stm32g070"]
 
 
-## test_rtic_i2c_master test_rtic_i2c_slave
+## test_rtic_i2c_master and test_rtic_i2c_slave
 
 This test should be used with 2 (nucleo) boards with i2c connected.
-You have to check if uart is correct, as I use one nucleo board, and one board of my onw with different setting.
+You have to check if uart is correct, as I use one nucleo board, and a board  with different uart settings.
 On one board load the master test:
 *  cargo embed --example test_rtic_i2c_master
 On the other board load the slave test
@@ -93,14 +95,19 @@ The test will check:
 * 2 good case for sending and reading from master to slave
 * bad cases where the frame size is not correct between master and slave
 * one good case for the master write_read with subaddressing
-* One can test the watchdog capability by disconnecting and connecting the slave at any time.
 * The watchdog does prevent the i2c bus from hanging!
+* One can test the watchdog capability by disconnecting and connecting the slave at any time, and check that the bus never hangs
 
-Note that the blocking and nonblocking variants in the test can be interchanged.
+Note that the blocking and nonblocking variants in the test can be interchanged, 
+* master in blocking variant connected to a slave in nonblocking variant
+* master in non-blocking variant connected to a slave in blocking variant
 
-[dependencies.stm32g0xx-hal]
-default-features = false
-features = ["rt", "stm32g070", "i2c-nonblocking"]
+Cargo.toml:
+
+    [dependencies.stm32g0xx-hal]
+    # Needed to disable the default feature "i2c-blocking"
+    default-features = false        
+    features = ["rt", "stm32g070", "i2c-nonblocking"]
 
 
 ## nb_i2c_master_simple
@@ -110,6 +117,9 @@ And IO expander (with leds connected) at address 0x20 should be connected and/or
 0x52.
 Note that both on the bus leads to buserrors, possible due to voltage incompatibility (3.3 and 5 V).
 
-[dependencies.stm32g0xx-hal]
-default-features = false
-features = ["rt", "stm32g070", "i2c-nonblocking"]
+Cargo.toml:
+
+    [dependencies.stm32g0xx-hal]
+    # Needed to disable the default feature "i2c-blocking"
+    default-features = false
+    features = ["rt", "stm32g070", "i2c-nonblocking"]
